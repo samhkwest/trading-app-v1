@@ -2,7 +2,18 @@
 
 import pandas as pd
 
+
 def load_local_data(path):
-    df = pd.read_parquet(path)
-    df = df.sort_values('datetime').reset_index(drop=True)
+    """
+    Load CSV data safely with datetime parsing.
+    """
+
+    df = pd.read_csv(path, parse_dates=['datetime'])
+
+    df = (
+        df.sort_values('datetime')
+          .drop_duplicates('datetime')
+          .reset_index(drop=True)
+    )
+
     return df
