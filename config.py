@@ -8,11 +8,11 @@ PORT=11111
 CODE="HK.MHImain"
 KLINE_1M=1500
 KLINE_5M=300
-TIMEFRAME=5  # "1m", "5m", "15m", etc.
+TIMEFRAME=5 # 1/5/15/30
 
 #backtest
-START_DATE="2026-03-30"
-END_DATE="2026-03-30"
+START_DATE="2026-04-02"
+END_DATE="2026-04-02"
 WARMUP_BARS=6        # Number of 5-min bars before trading starts
 POINT_VALUE=10       # MHI = HKD 10 per point
 TAKE_PROFIT=200      # in points

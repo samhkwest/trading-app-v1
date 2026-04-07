@@ -3,7 +3,7 @@ import time
 import socket
 import os
 
-OPEND_PATH = r"C:\Program Files\FutuOpenD\FutuOpenD.exe"
+OPEND_PATH = r"C:\Program Files\Futu_OpenD\Futu_OpenD.exe"
 HOST = "127.0.0.1"
 PORT = 11111
 
