@@ -81,8 +81,8 @@ def main():
     trade_log, stats = compute_statistics(trades)
 
     if trade_log is not None and not trade_log.empty:
-        print("\n================ TRADE LOG ================")
-        print(trade_log)
+        print("\n================ TRADE LOG (BACKTEST.PY) ================")
+        print(trade_log.to_string(index=False))
         trade_log.to_csv("trade_log.csv", index=False)
         print("\nTrade log saved to trade_log.csv")
 

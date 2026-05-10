@@ -1,65 +1,134 @@
 # strategy/signal.py
 
-def generate_signal(df_1m, df_5m, position):
+from config import (
+    ENABLE_BREAKOUT,
+    ENABLE_BOTTOM,
+    ENABLE_TRANSITIONAL,
+    REGIME_STRATEGY_MAP,
+    STRATEGY_PRIORITY,
+    PRINT_DEBUG_REGIME,
+    PRINT_DEBUG_SIGNAL
+)
 
-    if position != 0:
-        return None
+from strategy.regime import detect_regime
+from strategy.breakout_logic import breakout_signal
+from strategy.bottom_logic import bottom_signal
+from strategy.transitional_logic import transitional_signal
+from strategy.place_order import order_signal
 
-    # ==========================
-    # 1️⃣ Calculate 1m EMA
-    # ==========================
-    df_1m = df_1m.copy()
-    df_1m["ema5"] = df_1m["close"].ewm(span=5, adjust=False).mean()
-    df_1m["ema10"] = df_1m["close"].ewm(span=10, adjust=False).mean()
+# ==========================================================
+# Regime Cache (Multi-Timeframe Optimization)
+# ==========================================================
 
-    # ==========================
-    # 2️⃣ Calculate 5m RSI
-    # ==========================
-    df_5m = df_5m.copy()
+_cached_regime = None
+_last_5m_bar_time = None
 
-    delta = df_5m["close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
 
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
+def reset_regime_cache():
+    """
+    Reset regime cache before each backtest run.
+    Prevents cross-run contamination.
+    """
+    global _cached_regime, _last_5m_bar_time
+    _cached_regime = None
+    _last_5m_bar_time = None
 
-    rs = avg_gain / avg_loss
-    df_5m["rsi"] = 100 - (100 / (1 + rs))
 
-    # Need at least 2 bars for breakout comparison
-    if len(df_5m) < 2:
-        return None
+# ----------------------------------------------------------
+# Strategy Execution Dispatcher
+# ----------------------------------------------------------
 
-    latest_1m = df_1m.iloc[-1]
-    latest_5m = df_5m.iloc[-1]
-    prev_5m = df_5m.iloc[-2]
+def _execute_strategy(strategy_name, df_1m, df_5m, position):
 
-    # ==========================
-    # 3️⃣ TREND LOGIC (EMA)
-    # ==========================
-    ema5 = latest_1m["ema5"]
-    ema10 = latest_1m["ema10"]
+    if strategy_name == "BREAKOUT" and ENABLE_BREAKOUT:
+        return breakout_signal(df_1m, df_5m, position)
 
-    # ==========================
-    # 4️⃣ BREAKOUT LOGIC
-    # ==========================
-    breakout_long = (
-        latest_5m["close"] > prev_5m["high"] and
-        ema5 > ema10 and
-        latest_5m["rsi"] > 55
-    )
+    if strategy_name == "BOTTOM" and ENABLE_BOTTOM:
+        return bottom_signal(df_5m, position)
 
-    breakout_short = (
-        latest_5m["close"] < prev_5m["low"] and
-        ema5 < ema10 and
-        latest_5m["rsi"] < 45
-    )
-
-    if breakout_long:
-        return "BUY"
-
-    if breakout_short:
-        return "SELL"
+    if strategy_name == "TRANSITIONAL" and ENABLE_TRANSITIONAL:
+        return transitional_signal(df_1m, df_5m, position)
 
     return None
+
+
+# ----------------------------------------------------------
+# Main Signal Router
+# ----------------------------------------------------------
+def generate_signal(df_1m, df_5m, position):
+
+    signal = order_signal(df_1m, df_5m, position)
+
+    if signal and PRINT_DEBUG_SIGNAL:
+        print(f"[Signal] Order → {signal}")
+
+    return signal
+
+"""
+def generate_signal(df_1m, df_5m, position):
+
+    global _cached_regime
+    global _last_5m_bar_time
+
+    # Safety check
+    if df_5m.empty:
+        return None
+
+    # ------------------------------------------------------
+    # 1️⃣ Detect current market regime (Optimized)
+    # ------------------------------------------------------
+
+    current_5m_time = df_5m.iloc[-1]["datetime"]
+
+    # Only recompute regime when a new 5m candle appears
+    if _last_5m_bar_time != current_5m_time:
+
+        _cached_regime = detect_regime(df_5m)
+        _last_5m_bar_time = current_5m_time
+
+        if PRINT_DEBUG_REGIME:
+            print(f"[{current_5m_time}] [Regime Update] {_cached_regime}")
+
+    regime = _cached_regime
+
+    # ------------------------------------------------------
+    # 2️⃣ Get mapped strategies for this regime
+    # ------------------------------------------------------
+
+    strategies = REGIME_STRATEGY_MAP.get(regime, [])
+
+    if not strategies:
+        return None
+
+    # ------------------------------------------------------
+    # 3️⃣ Apply priority ordering
+    # ------------------------------------------------------
+
+    ordered_strategies = sorted(
+        strategies,
+        key=lambda x: STRATEGY_PRIORITY.index(x)
+        if x in STRATEGY_PRIORITY else 999
+    )
+
+    # ------------------------------------------------------
+    # 4️⃣ Execute in order, return first valid signal
+    # ------------------------------------------------------
+
+    for strategy_name in ordered_strategies:
+
+        signal = _execute_strategy(
+            strategy_name,
+            df_1m,
+            df_5m,
+            position
+        )
+
+        if signal:
+
+            if PRINT_DEBUG_SIGNAL:
+                print(f"[Signal] {strategy_name} → {signal}")
+
+            return signal
+
+    return None
+"""

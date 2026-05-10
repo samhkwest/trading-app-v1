@@ -1,1 +1,0 @@
-python D:\Trading\python run_paper.py

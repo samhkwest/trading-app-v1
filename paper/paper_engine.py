@@ -1,5 +1,5 @@
 from futu import *
-from strategy.signal import generate_signal
+from strategy.signal import generate_signal, reset_regime_cache
 from paper.portfolio import Portfolio
 from paper.execution import simulate_buy, simulate_sell
 import time
@@ -8,10 +8,13 @@ from config import HOST, PORT, KLINE_1M, KLINE_5M
 class PaperTrader:
 
     def __init__(self, code):
+        # Reset regime cache for clean session start
+        reset_regime_cache()
+
         self.code = code
         self.portfolio = Portfolio()
         self.quote_ctx = OpenQuoteContext(host=HOST, port=PORT)
-
+        
         self.quote_ctx.subscribe(code, [SubType.QUOTE, SubType.ORDER_BOOK])
 
     def on_tick(self):
