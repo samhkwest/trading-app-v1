@@ -59,8 +59,10 @@ def generate_signal(df_1m, df_5m, position):
 
     signal = order_signal(df_1m, df_5m, position)
 
+    '''
     if signal and PRINT_DEBUG_SIGNAL:
         print(f"[Signal] Order → {signal}")
+    '''
 
     return signal
 

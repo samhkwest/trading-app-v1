@@ -20,8 +20,9 @@ KLINE_5M = 300
 
 # BACKTEST SETTINGS
 # ==========================================================
-START_DATE = "2026-05-04"
-END_DATE = "2026-05-04"
+INITIAL_CAPITAL = 100000
+START_DATE = "2026-06-01"
+END_DATE = "2026-06-30"
 
 # Trade Config
 # ==========================================================
@@ -30,6 +31,7 @@ POINT_VALUE = 10      # MHI = HKD 10 per point
 TAKE_PROFIT = 200     # in points
 STOP_LOSS = 50        # in points
 ORDER_TYPE = "L"
+MIN_ENTRY_ATR = 33    # volatility filter threshold
 
 # STRATEGY ENABLE SWITCHES
 # ==========================================================
@@ -56,11 +58,15 @@ STRATEGY_PRIORITY = [
 # RISK MANAGEMENT
 # ==========================================================
 ENABLE_RISK_CONTROL = True
-INITIAL_CAPITAL = 70000
-MAX_ACCOUNT_DD_PERCENT = 0.35
-MAX_DAILY_LOSS = 3000
+MAX_DAILY_LOSS = 2000
 
 # DEBUG FLAGS
 # ==========================================================
 PRINT_DEBUG_REGIME = True
 PRINT_DEBUG_SIGNAL = True
+
+# ==========================================================
+# DIAGNOSTICS MODULE CONTROL
+# ==========================================================
+RUN_DIAGNOSTICS = True
+DIAGNOSTICS_PATH = "log/backtest_trade_log.csv"

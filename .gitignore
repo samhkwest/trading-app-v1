@@ -22,8 +22,9 @@ env/
 # =========================
 # Logs
 # =========================
-logs/
+log/
 *.log
+*.txt
 
 # =========================
 # Data Files (Important for trading apps)

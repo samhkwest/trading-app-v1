@@ -1,3 +1,6 @@
+from config import POINT_VALUE
+
+
 class Portfolio:
     def __init__(self):
         self.position = 0  # 0 flat, 1 long, -1 short
@@ -15,13 +18,18 @@ class Portfolio:
     def close_position(self, price):
 
         if self.position == 1:
-            pnl = price - self.entry_price
+            pnl_points = price - self.entry_price
         elif self.position == -1:
-            pnl = self.entry_price - price
+            pnl_points = self.entry_price - price
         else:
-            pnl = 0
+            pnl_points = 0
 
-        print(f"Closed position | PnL: {pnl}")
+        pnl_hkd = pnl_points * POINT_VALUE
+
+        print(f"Closed position | PnL (Points): {pnl_points} | PnL (HKD): {pnl_hkd}")
 
         self.position = 0
         self.entry_price = 0
+
+        # Required for RiskManager
+        return pnl_hkd

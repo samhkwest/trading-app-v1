@@ -3,12 +3,12 @@
 from data_downloader import update_local_data, get_ktype
 from data_loader import load_local_data
 from backtest_engine import run_backtest
-from stats import compute_statistics
-from config import START_DATE, END_DATE, CODE
-
+from config import START_DATE, END_DATE, CODE, RUN_DIAGNOSTICS
+from config import DIAGNOSTICS_PATH
+from diagnostics.performance_segmenter import run_diagnostics
+from datetime import datetime
 import pandas as pd
 import os
-
 
 def main():
 
@@ -40,7 +40,6 @@ def main():
     # --------------------------------------------------
     # 3) Datetime Filtering (Correct for Futures)
     # --------------------------------------------------
-
     df_1m["datetime"] = pd.to_datetime(df_1m["datetime"])
     df_5m["datetime"] = pd.to_datetime(df_5m["datetime"])
 
@@ -71,25 +70,36 @@ def main():
     print("5m Bars :", len(df_5m))
 
     # --------------------------------------------------
-    # 5) Run backtest
+    # ✅ 5) Run backtest (ONLY ONCE)
     # --------------------------------------------------
-    trades = run_backtest(df_1m, df_5m)
+    trade_log, stats = run_backtest(df_1m, df_5m)
 
     # --------------------------------------------------
-    # 6) Statistics
+    # 6) Print Trade Log
     # --------------------------------------------------
-    trade_log, stats = compute_statistics(trades)
-
     if trade_log is not None and not trade_log.empty:
         print("\n================ TRADE LOG (BACKTEST.PY) ================")
         print(trade_log.to_string(index=False))
         trade_log.to_csv("trade_log.csv", index=False)
         print("\nTrade log saved to trade_log.csv")
 
-    print("\n================ STATISTICS ================")
-    for k, v in stats.items():
-        print(f"{k}: {v}")
+    # --------------------------------------------------
+    # 7) Print Performance AFTER trade log
+    # --------------------------------------------------
+    if stats:
+        print("\n================ PERFORMANCE REPORT ================")
+        for k, v in stats.items():
+            print(f"{k}: {v}")
+        print("====================================================\n")
 
+    # --------------------------------------------------
+    # 8) Run Diagnostics (NEW)
+    # --------------------------------------------------
+    if RUN_DIAGNOSTICS:
+        print("\nRunning Performance Diagnostics...")
+        run_diagnostics(DIAGNOSTICS_PATH)
+    else:
+        print("Diagnostics disabled in config.py")
 
 if __name__ == "__main__":
     main()
