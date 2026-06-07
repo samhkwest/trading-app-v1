@@ -2,7 +2,7 @@
 
 from data_downloader import update_local_data, get_ktype
 from data_loader import load_local_data
-from backtest_engine import run_backtest
+from engine.backtest_engine import run_backtest
 from config import START_DATE, END_DATE, CODE, RUN_DIAGNOSTICS
 from config import DIAGNOSTICS_PATH
 from diagnostics.performance_segmenter import run_diagnostics
