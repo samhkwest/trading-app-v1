@@ -1,25 +1,16 @@
 # performance_tracker.py
- 
-from config import START_DATE, END_DATE
 
 class PerformanceTracker:
 
-    def __init__(self, initial_capital):
+    def __init__(self, initial_capital, period=None):
         self.initial_capital = initial_capital
         self.trades = []
+        self.period = period  # ✅ dynamic period support
 
     # -------------------------------------------------
     # ✅ Record Trade
     # -------------------------------------------------
     def record_trade(self, trade_dict):
-        """
-        trade_dict must contain:
-        - "PnL (HKD)"
-        - "Equity"
-        - "Drawdown (HKD)"
-        - "Drawdown (%)"
-        - "Direction"   (LONG / SHORT)
-        """
         self.trades.append(trade_dict)
 
     # -------------------------------------------------
@@ -53,7 +44,6 @@ class PerformanceTracker:
         max_drawdown_pct = max(t["Drawdown (%)"] for t in self.trades)
 
         recovery_factor = pnl_total / max_drawdown if max_drawdown > 0 else 0
-
         # ✅ Max Losing Streak
         max_losing_streak = 0
         current_streak = 0
@@ -64,7 +54,6 @@ class PerformanceTracker:
                 max_losing_streak = max(max_losing_streak, current_streak)
             else:
                 current_streak = 0
-
         # ✅ Longest Drawdown Duration
         longest_dd_duration = 0
         current_dd = 0
@@ -80,11 +69,9 @@ class PerformanceTracker:
             (self.trades[-1]["Equity"] - self.initial_capital)
             / self.initial_capital * 100
         )
-
         # ==================================================
         # ✅ Directional Breakdown
         # ==================================================
-
         long_trades = [t for t in self.trades if t.get("Direction") == "LONG"]
         short_trades = [t for t in self.trades if t.get("Direction") == "SHORT"]
 
@@ -101,7 +88,7 @@ class PerformanceTracker:
         short_win_rate = (short_wins / num_short * 100) if num_short > 0 else 0
 
         return {
-            "Period": START_DATE + " - " + END_DATE,
+            "Period": self.period,
             "P&L (HKD)": round(pnl_total, 2),
             "Profit Factor": round(profit_factor, 2),
             "Total Trades": total_trades,
@@ -119,7 +106,6 @@ class PerformanceTracker:
             "No. of Long": num_long,
             "Long P&L (HKD)": round(long_pnl, 2),
             "Long Win Rate (%)": round(long_win_rate, 1),
-
             "No. of Short": num_short,
             "Short P&L (HKD)": round(short_pnl, 2),
             "Short Win Rate (%)": round(short_win_rate, 1),
@@ -134,13 +120,11 @@ class PerformanceTracker:
 
         if not metrics:
             print("No trades executed.")
-            return
+            return metrics
 
         print("\n================ PERFORMANCE REPORT ================")
-
         for k, v in metrics.items():
             print(f"{k}: {v}")
-
         print("====================================================\n")
 
         return metrics

@@ -7,6 +7,7 @@ from strategy.strategy_engine import StrategyEngine
 from execution.position_manager import PositionManager
 from execution.execution_engine import ExecutionEngine
 #from strategy.signal import reset_regime_cache
+from config import START_DATE, END_DATE
 
 from config import (
     WARMUP_BARS,
@@ -29,8 +30,11 @@ def run_backtest(df_1m, df_5m):
     execution = ExecutionEngine(position_manager)
 
     risk = RiskManager()
-    performance = PerformanceTracker(INITIAL_CAPITAL)
-
+    #performance = PerformanceTracker(INITIAL_CAPITAL)
+    performance = PerformanceTracker(
+        INITIAL_CAPITAL,
+        period=f"{START_DATE} - {END_DATE}"
+    )
     trades = []
 
     # ✅ Precompute EMA20 slope distribution
