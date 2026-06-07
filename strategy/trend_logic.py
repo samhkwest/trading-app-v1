@@ -1,27 +1,52 @@
+# strategy/trend_logic.py
+
+import pandas as pd
+
 def trend_signal(df_1m, df_5m, position):
 
-    ema5 = df_1m["ema5"].iloc[-1]
-    ema10 = df_1m["ema10"].iloc[-1]
-    close_now = df_1m["close"].iloc[-1]
-    close_prev = df_1m["close"].iloc[-2]
+    if position != 0:
+        return None
 
-    ema20_5m_now = df_5m["ema20"].iloc[-1]
-    ema20_5m_prev = df_5m["ema20"].iloc[-2]
+    if len(df_1m) < 10 or len(df_5m) < 20:
+        return None
 
-    # 5m direction
-    if ema20_5m_now > ema20_5m_prev:
-        bias = "BULL"
-    else:
-        bias = "BEAR"
+    df1 = df_1m.copy()
+    df5 = df_5m.copy()
 
-    if position == 0:
+    # -------------------------------------------------
+    # 1️⃣ Compute EMA on 1m
+    # -------------------------------------------------
+    df1["ema5"] = df1["close"].ewm(span=5, adjust=False).mean()
+    df1["ema10"] = df1["close"].ewm(span=10, adjust=False).mean()
 
-        # Long pullback
-        if bias == "BULL" and ema5 > ema10 and close_now > close_prev:
+    ema5 = df1["ema5"].iloc[-1]
+    ema10 = df1["ema10"].iloc[-1]
+
+    close_now = df1["close"].iloc[-1]
+    close_prev = df1["close"].iloc[-2]
+
+    # -------------------------------------------------
+    # 2️⃣ Compute EMA20 slope on 5m
+    # -------------------------------------------------
+    df5["ema20"] = df5["close"].ewm(span=20, adjust=False).mean()
+
+    ema_now = df5["ema20"].iloc[-1]
+    ema_prev = df5["ema20"].iloc[-10]
+
+    slope = ema_now - ema_prev
+
+    # -------------------------------------------------
+    # 3️⃣ Directional Continuation Logic
+    # -------------------------------------------------
+
+    # Strong uptrend → Long continuation only
+    if slope > 0:
+        if ema5 > ema10 and close_now > close_prev:
             return "BUY"
 
-        # Short pullback
-        if bias == "BEAR" and ema5 < ema10 and close_now < close_prev:
+    # Strong downtrend → Short continuation only
+    if slope < 0:
+        if ema5 < ema10 and close_now < close_prev:
             return "SELL"
 
     return None

@@ -1,28 +1,18 @@
 # strategy/signal.py
 
-from config import (
-    ENABLE_BREAKOUT,
-    ENABLE_BOTTOM,
-    ENABLE_TRANSITIONAL,
-    REGIME_STRATEGY_MAP,
-    STRATEGY_PRIORITY,
-    PRINT_DEBUG_REGIME,
-    PRINT_DEBUG_SIGNAL
-)
+"""
+Signal Router
+---------------------------------------------------------
 
-from strategy.regime import detect_regime
-from strategy.breakout_logic import breakout_signal
-from strategy.bottom_logic import bottom_signal
-from strategy.transitional_logic import transitional_signal
-from strategy.place_order import order_signal
+Pure signal generation.
+No filters.
+No execution.
+No risk.
+"""
 
-# ==========================================================
-# Regime Cache (Multi-Timeframe Optimization)
-# ==========================================================
-
-_cached_regime = None
-_last_5m_bar_time = None
-
+from config import TREND_SLOPE_THRESHOLD
+from strategy.sweep_logic import sweep_signal
+from strategy.trend_logic import trend_signal
 
 def reset_regime_cache():
     """
@@ -33,104 +23,20 @@ def reset_regime_cache():
     _cached_regime = None
     _last_5m_bar_time = None
 
-
-# ----------------------------------------------------------
-# Strategy Execution Dispatcher
-# ----------------------------------------------------------
-
-def _execute_strategy(strategy_name, df_1m, df_5m, position):
-
-    if strategy_name == "BREAKOUT" and ENABLE_BREAKOUT:
-        return breakout_signal(df_1m, df_5m, position)
-
-    if strategy_name == "BOTTOM" and ENABLE_BOTTOM:
-        return bottom_signal(df_5m, position)
-
-    if strategy_name == "TRANSITIONAL" and ENABLE_TRANSITIONAL:
-        return transitional_signal(df_1m, df_5m, position)
-
-    return None
-
-
-# ----------------------------------------------------------
-# Main Signal Router
-# ----------------------------------------------------------
 def generate_signal(df_1m, df_5m, position):
 
-    signal = order_signal(df_1m, df_5m, position)
-
-    '''
-    if signal and PRINT_DEBUG_SIGNAL:
-        print(f"[Signal] Order → {signal}")
-    '''
-
-    return signal
-
-"""
-def generate_signal(df_1m, df_5m, position):
-
-    global _cached_regime
-    global _last_5m_bar_time
-
-    # Safety check
-    if df_5m.empty:
+    if df_5m is None or len(df_5m) < 20:
         return None
 
-    # ------------------------------------------------------
-    # 1️⃣ Detect current market regime (Optimized)
-    # ------------------------------------------------------
+    df5 = df_5m.copy()
+    df5["ema20"] = df5["close"].ewm(span=20, adjust=False).mean()
 
-    current_5m_time = df_5m.iloc[-1]["datetime"]
+    ema_now = df5["ema20"].iloc[-1]
+    ema_prev = df5["ema20"].iloc[-10]
 
-    # Only recompute regime when a new 5m candle appears
-    if _last_5m_bar_time != current_5m_time:
+    slope = ema_now - ema_prev
 
-        _cached_regime = detect_regime(df_5m)
-        _last_5m_bar_time = current_5m_time
+    if abs(slope) >= TREND_SLOPE_THRESHOLD:
+        return trend_signal(df_1m, df_5m, position)
 
-        if PRINT_DEBUG_REGIME:
-            print(f"[{current_5m_time}] [Regime Update] {_cached_regime}")
-
-    regime = _cached_regime
-
-    # ------------------------------------------------------
-    # 2️⃣ Get mapped strategies for this regime
-    # ------------------------------------------------------
-
-    strategies = REGIME_STRATEGY_MAP.get(regime, [])
-
-    if not strategies:
-        return None
-
-    # ------------------------------------------------------
-    # 3️⃣ Apply priority ordering
-    # ------------------------------------------------------
-
-    ordered_strategies = sorted(
-        strategies,
-        key=lambda x: STRATEGY_PRIORITY.index(x)
-        if x in STRATEGY_PRIORITY else 999
-    )
-
-    # ------------------------------------------------------
-    # 4️⃣ Execute in order, return first valid signal
-    # ------------------------------------------------------
-
-    for strategy_name in ordered_strategies:
-
-        signal = _execute_strategy(
-            strategy_name,
-            df_1m,
-            df_5m,
-            position
-        )
-
-        if signal:
-
-            if PRINT_DEBUG_SIGNAL:
-                print(f"[Signal] {strategy_name} → {signal}")
-
-            return signal
-
-    return None
-"""
+    return sweep_signal(df_1m, df_5m, position)

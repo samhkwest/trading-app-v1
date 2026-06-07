@@ -1,11 +1,28 @@
+# paper/paper_engine.py
+
+"""
+Paper Trading Engine (Refactored)
+---------------------------------------------------------
+
+Now uses EXACT SAME:
+- StrategyEngine
+- ExecutionEngine
+- PositionManager
+
+This ensures backtest = paper parity.
+"""
+
 from futu import *
-from strategy.signal import generate_signal, reset_regime_cache
-from paper.portfolio import Portfolio
-from paper.execution import simulate_buy, simulate_sell
-from risk.risk_manager import RiskManager
-from risk.performance_tracker import PerformanceTracker
 from datetime import datetime
 import time
+
+from strategy.strategy_engine import StrategyEngine
+from execution.position_manager import PositionManager
+from execution.execution_engine import ExecutionEngine
+
+from risk.risk_manager import RiskManager
+from risk.performance_tracker import PerformanceTracker
+
 from config import HOST, PORT, KLINE_1M, KLINE_5M, INITIAL_CAPITAL
 
 
@@ -13,75 +30,95 @@ class PaperTrader:
 
     def __init__(self, code):
 
-        reset_regime_cache()
-
         self.code = code
-        self.portfolio = Portfolio()
-        self.risk = RiskManager()
 
-        # ✅ Performance Tracker
+        self.strategy = StrategyEngine()
+        self.position_manager = PositionManager()
+        self.execution = ExecutionEngine(self.position_manager)
+
+        self.risk = RiskManager()
         self.performance = PerformanceTracker(INITIAL_CAPITAL)
 
         self.quote_ctx = OpenQuoteContext(host=HOST, port=PORT)
-        self.quote_ctx.subscribe(code, [SubType.QUOTE, SubType.ORDER_BOOK])
+        self.quote_ctx.subscribe(code, [SubType.QUOTE])
+
+    # ==========================================================
+    # ✅ TICK HANDLER
+    # ==========================================================
 
     def on_tick(self):
 
         if not self.risk.trading_enabled:
-            print("Trading disabled by Risk Manager.")
             return
 
-        ret1, df_1m = self.quote_ctx.get_cur_kline(self.code, KLINE_1M, KLType.K_1M)
-        ret2, df_5m = self.quote_ctx.get_cur_kline(self.code, KLINE_5M, KLType.K_5M)
+        ret1, df_1m = self.quote_ctx.get_cur_kline(
+            self.code, KLINE_1M, KLType.K_1M
+        )
+        ret2, df_5m = self.quote_ctx.get_cur_kline(
+            self.code, KLINE_5M, KLType.K_5M
+        )
 
         if ret1 != 0 or ret2 != 0:
             return
 
-        signal = generate_signal(df_1m, df_5m, self.portfolio.position)
-        last_price = df_1m["close"].iloc[-1]
         current_time = datetime.now()
+        last_price = df_1m["close"].iloc[-1]
+        high = df_1m["high"].iloc[-1]
+        low = df_1m["low"].iloc[-1]
 
-        if signal == "BUY":
+        # ==========================================================
+        # ✅ STRATEGY EVALUATION
+        # ==========================================================
+        decision = self.strategy.evaluate(
+            df_1m,
+            df_5m,
+            self.position_manager.position,
+            df_5m_full=df_5m
+        )
 
-            if self.portfolio.position == 0:
-                print("OPEN LONG", last_price)
-                self.portfolio.open_position("BUY", last_price)
+        # ==========================================================
+        # ✅ ENTRY
+        # ==========================================================
+        if (
+            decision
+            and self.position_manager.position == 0
+            and self.risk.trading_enabled
+        ):
+            self.execution.process_entry(
+                decision,
+                last_price,
+                current_time
+            )
 
-            elif self.portfolio.position == -1:
-                print("CLOSE SHORT", last_price)
-                pnl_hkd = self.portfolio.close_position(last_price)
-                self.risk.update_after_trade(pnl_hkd, current_time)
+        # ==========================================================
+        # ✅ EXIT
+        # ==========================================================
+        exit_result = self.execution.check_exit(
+            high,
+            low,
+            current_time
+        )
 
-                # ✅ Record trade
-                trade_record = {
-                    "PnL (HKD)": pnl_hkd,
-                    "Equity": self.risk.equity,
-                    "Drawdown (HKD)": self.risk.get_drawdown(),
-                    "Drawdown (%)": self.risk.get_drawdown_pct(),
-                }
+        if exit_result:
 
-                self.performance.record_trade(trade_record)
+            pnl_hkd = exit_result["pnl_hkd"]
+            direction = exit_result["direction"]
 
-        elif signal == "SELL":
+            self.risk.update_after_trade(pnl_hkd, current_time)
 
-            if self.portfolio.position == 0:
-                print("OPEN SHORT", last_price)
-                self.portfolio.open_position("SELL", last_price)
+            trade_record = {
+                "Direction": direction,
+                "PnL (HKD)": pnl_hkd,
+                "Equity": self.risk.equity,
+                "Drawdown (HKD)": self.risk.get_drawdown(),
+                "Drawdown (%)": self.risk.get_drawdown_pct(),
+            }
 
-            elif self.portfolio.position == 1:
-                print("CLOSE LONG", last_price)
-                pnl_hkd = self.portfolio.close_position(last_price)
-                self.risk.update_after_trade(pnl_hkd, current_time)
+            self.performance.record_trade(trade_record)
 
-                # ✅ Record trade
-                trade_record = {
-                    "PnL (HKD)": pnl_hkd,
-                    "Equity": self.risk.equity,
-                    "Drawdown (HKD)": self.risk.get_drawdown(),
-                    "Drawdown (%)": self.risk.get_drawdown_pct(),
-                }
-
-                self.performance.record_trade(trade_record)
+    # ==========================================================
+    # ✅ MAIN LOOP
+    # ==========================================================
 
     def run(self):
 
@@ -91,10 +128,6 @@ class PaperTrader:
                 time.sleep(1)
 
             except KeyboardInterrupt:
-                print("Stopping paper trader...")
-
-                # ✅ Print performance report before exit
                 self.performance.print_report()
-
                 self.quote_ctx.close()
                 break

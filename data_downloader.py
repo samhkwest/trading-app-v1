@@ -3,9 +3,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 import time
+import sys
 
 from connection import start_opend
-from config import HOST, PORT, CODE, TIMEFRAME
+from config import HOST, PORT, CODE, TIMEFRAME, START_DATE, END_DATE
 
 
 def get_ktype(timeframe):
@@ -25,7 +26,7 @@ def get_chunk_days(timeframe):
     Conservative chunk sizing to reduce hitting 1000-bar cap.
     """
     if timeframe == 1:
-        return 3      # safer for 1m
+        return 3
     elif timeframe <= 5:
         return 10
     else:
@@ -33,17 +34,25 @@ def get_chunk_days(timeframe):
 
 
 # ==========================================================
-# FULL DOWNLOAD
+# FULL OR PERIOD DOWNLOAD
 # ==========================================================
 
-def download_full_history(ktype, timeframe):
+def download_full_history(ktype, timeframe, download_all=None):
 
     save_path = f"data/{CODE.replace('.', '_')}_{timeframe}m.csv"
-
     quote_ctx = OpenQuoteContext(host=HOST, port=PORT)
 
-    start_dt = datetime.strptime("2023-01-01", "%Y-%m-%d")
-    end_dt = datetime.now()
+    # ------------------------------------------------------
+    # ✅ Decide download range
+    # ------------------------------------------------------
+    if download_all == 1:
+        print(f"Downloading data BETWEEN {START_DATE} and {END_DATE}")
+        start_dt = datetime.strptime(START_DATE, "%Y-%m-%d")
+        end_dt = datetime.strptime(END_DATE, "%Y-%m-%d")
+    else:
+        print("Downloading FULL history from 2023-01-01 to now")
+        start_dt = datetime.strptime("2023-01-01", "%Y-%m-%d")
+        end_dt = datetime.now()
 
     chunk_days = get_chunk_days(timeframe)
     all_data = []
@@ -77,12 +86,10 @@ def download_full_history(ktype, timeframe):
 
         last_time = pd.to_datetime(data['time_key'].iloc[-1])
 
-        # SAFETY: prevent infinite loop
         if last_time <= start_dt:
             print("No forward progress detected. Breaking.")
             break
 
-        # If hit API cap → resume from last timestamp
         if len(data) == 1000:
             start_dt = last_time + timedelta(minutes=timeframe)
         else:
@@ -120,10 +127,17 @@ def download_full_history(ktype, timeframe):
 # INCREMENTAL UPDATE
 # ==========================================================
 
-def update_local_data(ktype, timeframe):
+def update_local_data(ktype, timeframe, download_all=None):
 
     save_path = f"data/{CODE.replace('.', '_')}_{timeframe}m.csv"
 
+    # ✅ If period-only mode → force re-download for that period
+    if download_all == 1:
+        print("Period mode detected.")
+        download_full_history(ktype, timeframe, download_all=1)
+        return
+
+    # ✅ Default behavior (full history or incremental update)
     if not os.path.exists(save_path):
         print("No local file found. Performing full download.")
         download_full_history(ktype, timeframe)
@@ -169,7 +183,6 @@ def update_local_data(ktype, timeframe):
 
         last_time = pd.to_datetime(data['time_key'].iloc[-1])
 
-        # SAFETY: prevent infinite loop
         if last_time <= start_dt:
             print("No forward progress detected. Breaking.")
             break
@@ -210,6 +223,12 @@ def update_local_data(ktype, timeframe):
 
 if __name__ == "__main__":
 
+    download_flag = None
+
+    # ✅ If user passes 1 → period-only mode
+    if len(sys.argv) > 1 and sys.argv[1] == "1":
+        download_flag = 1
+
     if not start_opend():
         print("Cannot start OpenD.")
     else:
@@ -219,4 +238,4 @@ if __name__ == "__main__":
             print("Invalid TIMEFRAME in config.")
         else:
             print("ktype:", ktype)
-            update_local_data(ktype, TIMEFRAME)
+            update_local_data(ktype, TIMEFRAME, download_all=download_flag)

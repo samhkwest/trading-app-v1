@@ -93,7 +93,7 @@ def main():
         print("====================================================\n")
 
     # --------------------------------------------------
-    # 8) Run Diagnostics (NEW)
+    # 8) Run Diagnostics
     # --------------------------------------------------
     if RUN_DIAGNOSTICS:
         print("\nRunning Performance Diagnostics...")

@@ -8,10 +8,12 @@ PORT = 11111
 # GENERAL
 # ==========================================================
 CODE = "HK.MHImain"
+ENABLE_LONG = True
+ENABLE_SHORT = True
 
 # Download Data
 # ==========================================================
-TIMEFRAME = 1  # 1/5/15/30
+TIMEFRAME = 5  # 1/5/15/30
 
 # DATA SETTINGS
 # ==========================================================
@@ -21,7 +23,7 @@ KLINE_5M = 300
 # BACKTEST SETTINGS
 # ==========================================================
 INITIAL_CAPITAL = 100000
-START_DATE = "2026-06-01"
+START_DATE = "2026-03-01"
 END_DATE = "2026-06-30"
 
 # Trade Config
@@ -35,25 +37,25 @@ MIN_ENTRY_ATR = 33    # volatility filter threshold
 
 # STRATEGY ENABLE SWITCHES
 # ==========================================================
-ENABLE_BREAKOUT = False
-ENABLE_BOTTOM = False
-ENABLE_TRANSITIONAL = False
+#ENABLE_BREAKOUT = False
+#ENABLE_BOTTOM = False
+#ENABLE_TRANSITIONAL = False
 
 # REGIME → STRATEGY ROUTING
 # ==========================================================
-REGIME_STRATEGY_MAP = {
-    "TREND": ["BREAKOUT"],
-    "RANGE": ["BOTTOM"],
-    "TRANSITION": ["TRANSITIONAL"]
-}
+#REGIME_STRATEGY_MAP = {
+#    "TREND": ["BREAKOUT"],
+#    "RANGE": ["BOTTOM"],
+#    "TRANSITION": ["TRANSITIONAL"]
+#}
 
 # STRATEGY PRIORITY
 # ==========================================================
-STRATEGY_PRIORITY = [
-    "TRANSITIONAL",
-    "BREAKOUT",
-    "BOTTOM"
-]
+#STRATEGY_PRIORITY = [
+#    "TRANSITIONAL",
+#    "BREAKOUT",
+#    "BOTTOM"
+#]
 
 # RISK MANAGEMENT
 # ==========================================================
@@ -70,3 +72,7 @@ PRINT_DEBUG_SIGNAL = True
 # ==========================================================
 RUN_DIAGNOSTICS = True
 DIAGNOSTICS_PATH = "log/backtest_trade_log.csv"
+
+# Trend Regime Control
+# ==========================================================
+TREND_SLOPE_THRESHOLD = 45   # 5m EMA20 slope threshold

@@ -18,6 +18,7 @@ class PerformanceTracker:
         - "Equity"
         - "Drawdown (HKD)"
         - "Drawdown (%)"
+        - "Direction"   (LONG / SHORT)
         """
         self.trades.append(trade_dict)
 
@@ -80,8 +81,27 @@ class PerformanceTracker:
             / self.initial_capital * 100
         )
 
+        # ==================================================
+        # ✅ Directional Breakdown
+        # ==================================================
+
+        long_trades = [t for t in self.trades if t.get("Direction") == "LONG"]
+        short_trades = [t for t in self.trades if t.get("Direction") == "SHORT"]
+
+        num_long = len(long_trades)
+        num_short = len(short_trades)
+
+        long_pnl = sum(t["PnL (HKD)"] for t in long_trades)
+        short_pnl = sum(t["PnL (HKD)"] for t in short_trades)
+
+        long_wins = len([t for t in long_trades if t["PnL (HKD)"] > 0])
+        short_wins = len([t for t in short_trades if t["PnL (HKD)"] > 0])
+
+        long_win_rate = (long_wins / num_long * 100) if num_long > 0 else 0
+        short_win_rate = (short_wins / num_short * 100) if num_short > 0 else 0
+
         return {
-            "Period": START_DATE+" - "+END_DATE,
+            "Period": START_DATE + " - " + END_DATE,
             "P&L (HKD)": round(pnl_total, 2),
             "Profit Factor": round(profit_factor, 2),
             "Total Trades": total_trades,
@@ -91,9 +111,18 @@ class PerformanceTracker:
             "Total Return (%)": round(total_return_pct, 1),
             "Max Drawdown (HKD)": round(max_drawdown, 2),
             "Max Drawdown (%)": round(max_drawdown_pct, 1),
-            "Recovery Factor": round(recovery_factor, 2),            
+            "Recovery Factor": round(recovery_factor, 2),
             "Max Losing Streak": max_losing_streak,
             "Longest DD Duration (Trades)": longest_dd_duration,
+
+            # ✅ Directional Stats
+            "No. of Long": num_long,
+            "Long P&L (HKD)": round(long_pnl, 2),
+            "Long Win Rate (%)": round(long_win_rate, 1),
+
+            "No. of Short": num_short,
+            "Short P&L (HKD)": round(short_pnl, 2),
+            "Short Win Rate (%)": round(short_win_rate, 1),
         }
 
     # -------------------------------------------------
