@@ -35,6 +35,13 @@ STOP_LOSS = 50        # in points
 ORDER_TYPE = "L"
 MIN_ENTRY_ATR = 33    # volatility filter threshold
 
+# VOLUME CONFIRMATION SETTINGS (NEW)
+# ==========================================================
+VOLUME_MA_PERIOD = 20          # Look back period for volume MA
+VOLUME_MULTIPLIER = 1.3        # Current vol must be > 1.3x MA
+VOLUME_CONFIRMATION_ENABLED = True
+PRINT_DEBUG_VOLUME = False     # Debug flag for volume filtering
+
 # STRATEGY ENABLE SWITCHES
 # ==========================================================
 #ENABLE_BREAKOUT = False
@@ -66,6 +73,7 @@ MAX_DAILY_LOSS = 2000
 # ==========================================================
 PRINT_DEBUG_REGIME = True
 PRINT_DEBUG_SIGNAL = True
+PRINT_DEBUG_VOLUME = False     # Volume filter debug
 
 # ==========================================================
 # DIAGNOSTICS MODULE CONTROL

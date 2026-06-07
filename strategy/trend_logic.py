@@ -1,8 +1,17 @@
 # strategy/trend_logic.py
 
 import pandas as pd
+from strategy.entry_filters import volume_confirmation_filter
+from config import PRINT_DEBUG_VOLUME
 
 def trend_signal(df_1m, df_5m, position):
+    """
+    Trend continuation signal with volume confirmation.
+    
+    Trades pullbacks in strong trends:
+    - Uptrend: EMA5 > EMA10 + higher close (with volume)
+    - Downtrend: EMA5 < EMA10 + lower close (with volume)
+    """
 
     if position != 0:
         return None
@@ -39,14 +48,30 @@ def trend_signal(df_1m, df_5m, position):
     # 3️⃣ Directional Continuation Logic
     # -------------------------------------------------
 
+    signal = None
+
     # Strong uptrend → Long continuation only
     if slope > 0:
         if ema5 > ema10 and close_now > close_prev:
-            return "BUY"
+            signal = "BUY"
 
     # Strong downtrend → Short continuation only
     if slope < 0:
         if ema5 < ema10 and close_now < close_prev:
-            return "SELL"
+            signal = "SELL"
 
-    return None
+    if signal is None:
+        return None
+
+    # -------------------------------------------------
+    # 4️⃣ ✅ VOLUME CONFIRMATION (NEW)
+    # -------------------------------------------------
+    if not volume_confirmation_filter(df_5m, print_debug=PRINT_DEBUG_VOLUME):
+        if PRINT_DEBUG_VOLUME:
+            print(f"[Trend] {signal} signal BLOCKED by volume filter")
+        return None
+
+    if PRINT_DEBUG_VOLUME:
+        print(f"[Trend] {signal} signal APPROVED (volume confirmed)")
+
+    return signal
