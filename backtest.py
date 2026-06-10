@@ -4,11 +4,13 @@ from data_downloader import update_local_data, get_ktype
 from data_loader import load_local_data
 from engine.backtest_engine import run_backtest
 from config import START_DATE, END_DATE, CODE, RUN_DIAGNOSTICS
-from config import DIAGNOSTICS_PATH
+from config import DIAGNOSTICS_PATH, TIMEFRAME_CONFIG
 from diagnostics.performance_segmenter import run_diagnostics
 from datetime import datetime
+from data.csv_price_provider import CSVPriceProvider
 import pandas as pd
 import os
+
 
 def main():
 
@@ -16,66 +18,59 @@ def main():
     print("Working directory:", os.getcwd())
 
     # --------------------------------------------------
-    # 1) Update data
+    # ✅ 1) Update required timeframes dynamically
     # --------------------------------------------------
-    print("\nUpdating 1m data...")
-    update_local_data(get_ktype(1), 1)
+    required_tfs = set(TIMEFRAME_CONFIG.values())
 
-    print("Updating 5m data...")
-    update_local_data(get_ktype(5), 5)
+    for tf in required_tfs:
+        path = f"data/{CODE.replace('.', '_')}_{tf}m.csv"
 
-    # --------------------------------------------------
-    # 2) Load CSV files
-    # --------------------------------------------------
-    path_1m = f"data/{CODE.replace('.', '_')}_1m.csv"
-    path_5m = f"data/{CODE.replace('.', '_')}_5m.csv"
-
-    print("\nLoading files:")
-    print("1m path:", path_1m)
-    print("5m path:", path_5m)
-
-    df_1m = load_local_data(path_1m)
-    df_5m = load_local_data(path_5m)
+        if not os.path.exists(path):
+            print(f"\nDownloading {tf}m data...")
+            update_local_data(get_ktype(tf), tf)
+        else:
+            print(f"\n{tf}m data already exists. Skipping download.")
 
     # --------------------------------------------------
-    # 3) Datetime Filtering (Correct for Futures)
+    # ✅ 2) Load CSV files dynamically
     # --------------------------------------------------
-    df_1m["datetime"] = pd.to_datetime(df_1m["datetime"])
-    df_5m["datetime"] = pd.to_datetime(df_5m["datetime"])
+    data_dict = {}
 
-    start_dt = pd.to_datetime(START_DATE)
-    end_dt = pd.to_datetime(END_DATE) + pd.Timedelta(days=1)
+    for tf in required_tfs:
+        path = f"data/{CODE.replace('.', '_')}_{tf}m.csv"
+        print(f"Loading {tf}m path:", path)
 
-    df_1m = df_1m[
-        (df_1m["datetime"] >= start_dt) &
-        (df_1m["datetime"] <= end_dt)
-    ].reset_index(drop=True)
+        df = load_local_data(path)
+        df["datetime"] = pd.to_datetime(df["datetime"])
 
-    df_5m = df_5m[
-        (df_5m["datetime"] >= start_dt) &
-        (df_5m["datetime"] <= end_dt)
-    ].reset_index(drop=True)
+        start_dt = pd.to_datetime(START_DATE)
+        end_dt = pd.to_datetime(END_DATE) + pd.Timedelta(days=1)
 
-    # --------------------------------------------------
-    # 4) Check if empty
-    # --------------------------------------------------
-    if df_1m.empty or df_5m.empty:
-        print("\nNo data in selected date range.")
-        return
+        df = df[
+            (df["datetime"] >= start_dt) &
+            (df["datetime"] <= end_dt)
+        ].reset_index(drop=True)
 
-    print("\nBacktest Date Range:")
-    print("1m Start:", df_1m["datetime"].min())
-    print("1m End  :", df_1m["datetime"].max())
-    print("1m Bars :", len(df_1m))
-    print("5m Bars :", len(df_5m))
+        if df.empty:
+            print(f"No data in selected range for {tf}m.")
+            return
+
+        data_dict[tf] = df
+
+        print(f"{tf}m Bars:", len(df))
 
     # --------------------------------------------------
-    # ✅ 5) Run backtest (ONLY ONCE)
+    # ✅ 3) Create Provider
     # --------------------------------------------------
-    trade_log, stats = run_backtest(df_1m, df_5m)
+    provider = CSVPriceProvider(data_dict)
 
     # --------------------------------------------------
-    # 6) Print Trade Log
+    # ✅ 4) Run Backtest
+    # --------------------------------------------------
+    trade_log, stats = run_backtest(provider)
+
+    # --------------------------------------------------
+    # 5) Print Trade Log
     # --------------------------------------------------
     if trade_log is not None and not trade_log.empty:
         print("\n================ TRADE LOG (BACKTEST.PY) ================")
@@ -84,22 +79,22 @@ def main():
         print("\nTrade log saved to trade_log.csv")
 
     # --------------------------------------------------
-    # 7) Print Performance AFTER trade log
+    # 6) Print Performance AFTER trade log
     # --------------------------------------------------
     if stats:
         print("\n================ PERFORMANCE REPORT ================")
         for k, v in stats.items():
             print(f"{k}: {v}")
         print("====================================================\n")
-
     # --------------------------------------------------
-    # 8) Run Diagnostics
+    # 7) Run Diagnostics
     # --------------------------------------------------
     if RUN_DIAGNOSTICS:
         print("\nRunning Performance Diagnostics...")
         run_diagnostics(DIAGNOSTICS_PATH)
     else:
         print("Diagnostics disabled in config.py")
+
 
 if __name__ == "__main__":
     main()

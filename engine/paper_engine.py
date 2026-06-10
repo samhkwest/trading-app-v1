@@ -10,7 +10,7 @@ from execution.position_manager import PositionManager
 from execution.execution_engine import ExecutionEngine
 from risk.risk_manager import RiskManager
 from risk.performance_tracker import PerformanceTracker
-from config import HOST, PORT, KLINE_1M, KLINE_5M, INITIAL_CAPITAL, POINT_VALUE
+from config import HOST, PORT, INITIAL_CAPITAL, POINT_VALUE, TIMEFRAME_CONFIG
 
 class PaperTrader:
 
@@ -20,6 +20,7 @@ class PaperTrader:
 
         self.code = code
         self.shutdown_triggered = False
+        self.last_entry_bar_time = None
 
         self.strategy = StrategyEngine()
         self.position_manager = PositionManager()
@@ -36,7 +37,22 @@ class PaperTrader:
         self.trades = []
 
         self.quote_ctx = OpenQuoteContext(host=HOST, port=PORT)
-        self.quote_ctx.subscribe(code, [SubType.QUOTE])
+
+        # ✅ Dynamic timeframe subscription
+        entry_tf = TIMEFRAME_CONFIG["entry"]
+        structure_tf = TIMEFRAME_CONFIG["structure"]
+        trend_tf = TIMEFRAME_CONFIG["trend"]
+
+        sub_types = [SubType.QUOTE]
+
+        if entry_tf == 1:
+            sub_types.append(SubType.K_1M)
+        if structure_tf == 5 or trend_tf == 5:
+            sub_types.append(SubType.K_5M)
+        if structure_tf == 3 or trend_tf == 3:
+            sub_types.append(SubType.K_3M)
+
+        self.quote_ctx.subscribe(code, sub_types)
 
     # -------------------------------------------------
     # ✅ Market Close Detection
@@ -101,12 +117,15 @@ class PaperTrader:
 
         print(f"\nStopping Paper Trading: {reason}")
 
-        ret, df_1m = self.quote_ctx.get_cur_kline(
-            self.code, KLINE_1M, KLType.K_1M
+        entry_tf = TIMEFRAME_CONFIG["entry"]
+        kl_type = self._map_tf_to_kltype(entry_tf)
+
+        ret, df_entry = self.quote_ctx.get_cur_kline(
+            self.code, 100, kl_type
         )
 
-        if ret == 0 and not df_1m.empty:
-            last_price = df_1m["close"].iloc[-1]
+        if ret == 0 and not df_entry.empty:
+            last_price = df_entry["close"].iloc[-1]
             now = datetime.now()
             self.force_close(last_price, now)
 
@@ -136,38 +155,60 @@ class PaperTrader:
     # -------------------------------------------------
     def on_tick(self):
 
-        ret1, df_1m = self.quote_ctx.get_cur_kline(
-            self.code, KLINE_1M, KLType.K_1M
-        )
-        ret2, df_5m = self.quote_ctx.get_cur_kline(
-            self.code, KLINE_5M, KLType.K_5M
+        entry_tf = TIMEFRAME_CONFIG["entry"]
+        structure_tf = TIMEFRAME_CONFIG["structure"]
+        trend_tf = TIMEFRAME_CONFIG["trend"]
+
+        ret_entry, df_entry = self.quote_ctx.get_cur_kline(
+            self.code, 200, self._map_tf_to_kltype(entry_tf)
         )
 
-        if ret1 != 0 or ret2 != 0:
+        if ret_entry != 0 or df_entry.empty:
+            return
+
+        current_bar_time = df_entry["time_key"].iloc[-1]
+
+        # ✅ Only evaluate when new entry bar forms
+        if self.last_entry_bar_time == current_bar_time:
+            return
+
+        self.last_entry_bar_time = current_bar_time
+
+        ret_structure, df_structure = self.quote_ctx.get_cur_kline(
+            self.code, 200, self._map_tf_to_kltype(structure_tf)
+        )
+
+        ret_trend, df_trend = self.quote_ctx.get_cur_kline(
+            self.code, 200, self._map_tf_to_kltype(trend_tf)
+        )
+
+        if ret_structure != 0 or ret_trend != 0:
             return
 
         current_time = datetime.now()
+
+        print("Tick executing at:", current_time)
 
         if self.is_market_close(current_time):
             self.shutdown("Market Close")
             return
 
-        last_price = df_1m["close"].iloc[-1]
-        high = df_1m["high"].iloc[-1]
-        low = df_1m["low"].iloc[-1]
+        last_price = df_entry["close"].iloc[-1]
+        high = df_entry["high"].iloc[-1]
+        low = df_entry["low"].iloc[-1]
 
         # -------------------------------------------------
         # ✅ STRATEGY EVALUATION
         # -------------------------------------------------
         decision = self.strategy.evaluate(
-            df_1m,
-            df_5m,
+            df_entry,
+            df_structure,
             self.position_manager.position,
-            df_5m_full=df_5m
+            df_trend=df_trend
         )
 
         # -------------------------------------------------
-        # # ✅ ENTRY
+        # ✅ ENTRY
         # -------------------------------------------------
         if (
             decision
@@ -181,7 +222,7 @@ class PaperTrader:
             )
 
         # -------------------------------------------------
-        # # ✅ EXIT
+        # ✅ EXIT
         # -------------------------------------------------
         exit_result = self.execution.check_exit(
             high,
@@ -213,6 +254,15 @@ class PaperTrader:
 
             self.trades.append(trade_record)
             self.performance.record_trade(trade_record)
+
+    def _map_tf_to_kltype(self, tf):
+        if tf == 1:
+            return KLType.K_1M
+        if tf == 3:
+            return KLType.K_3M
+        if tf == 5:
+            return KLType.K_5M
+        raise ValueError(f"Unsupported timeframe: {tf}")
 
     def is_market_open(self, now):
 
@@ -249,6 +299,9 @@ class PaperTrader:
     # ✅ Main Loop
     # -------------------------------------------------
     def run(self):
+
+        now = datetime.now()
+        print("Now:", now, "| Market Open:", self.is_market_open(now))
 
         print("Entering run loop...")
 

@@ -6,49 +6,42 @@ import pandas as pd
 from strategy.strategy_engine import StrategyEngine
 from execution.position_manager import PositionManager
 from execution.execution_engine import ExecutionEngine
-#from strategy.signal import reset_regime_cache
-from config import START_DATE, END_DATE
-
-from config import (
-    WARMUP_BARS,
-    INITIAL_CAPITAL,
-    POINT_VALUE
-)
-
+from config import START_DATE, END_DATE, TIMEFRAME_CONFIG
+from config import WARMUP_BARS, INITIAL_CAPITAL, POINT_VALUE
 from risk.risk_manager import RiskManager
 from risk.performance_tracker import PerformanceTracker
 
 print("ENGINE FILE LOADED")
 
 
-def run_backtest(df_1m, df_5m):
-
-    #reset_regime_cache()
+def run_backtest(provider):
 
     strategy = StrategyEngine()
     position_manager = PositionManager()
     execution = ExecutionEngine(position_manager)
 
     risk = RiskManager()
-    #performance = PerformanceTracker(INITIAL_CAPITAL)
     performance = PerformanceTracker(
         INITIAL_CAPITAL,
         period=f"{START_DATE} - {END_DATE}"
     )
+
     trades = []
 
-    # ✅ Precompute EMA20 slope distribution
-    df_5m_copy = df_5m.copy()
-    df_5m_copy["ema20"] = df_5m_copy["close"].ewm(span=20, adjust=False).mean()
-    df_5m_copy["ema20_slope"] = (
-        df_5m_copy["ema20"] - df_5m_copy["ema20"].shift(10)
-    )
+    entry_tf = TIMEFRAME_CONFIG["entry"]
+    structure_tf = TIMEFRAME_CONFIG["structure"]
+    trend_tf = TIMEFRAME_CONFIG["trend"]
 
-    for i in range(WARMUP_BARS, len(df_1m)):
+    df_entry_full = provider.get_candles(entry_tf)
 
-        df_1m_slice = df_1m.iloc[:i+1].copy()
+    # ✅ DO NOT use full trend history (prevents look-ahead bias)
+    # df_trend_full = provider.get_candles(trend_tf)
 
-        current_bar = df_1m_slice.iloc[-1]
+    for i in range(WARMUP_BARS, len(df_entry_full)):
+
+        df_entry_slice = df_entry_full.iloc[:i+1].copy()
+
+        current_bar = df_entry_slice.iloc[-1]
         current_time = current_bar["datetime"]
         current_close = current_bar["close"]
         current_high = current_bar["high"]
@@ -56,22 +49,33 @@ def run_backtest(df_1m, df_5m):
 
         risk.update_after_trade(0, current_time)
 
-        df_5m_slice = df_5m[
-            df_5m["datetime"] <= current_time
-        ].copy()
+        df_structure_slice = provider.get_candles(
+            structure_tf,
+            up_to_time=current_time
+        )
 
-        if len(df_5m_slice) < WARMUP_BARS:
+        df_trend_slice = provider.get_candles(
+            trend_tf,
+            up_to_time=current_time
+        )
+
+        # ✅ Ensure enough structure data
+        if len(df_structure_slice) < WARMUP_BARS:
+            continue
+
+        # ✅ Ensure enough trend data for EMA20 + slope calculation stability
+        # EMA20 requires ~20 bars, slope uses shift(10)
+        if len(df_trend_slice) < 30:
             continue
 
         # -------------------------------------------------
         # ✅ STRATEGY
         # -------------------------------------------------
-
         decision = strategy.evaluate(
-            df_1m_slice,
-            df_5m_slice,
+            df_entry_slice,
+            df_structure_slice,
             position_manager.position,
-            df_5m_full=df_5m_copy
+            df_trend=df_trend_slice
         )
 
         if (
@@ -90,7 +94,6 @@ def run_backtest(df_1m, df_5m):
         # -------------------------------------------------
         # ✅ EXIT CHECK
         # -------------------------------------------------
-
         exit_result = execution.check_exit(
             current_high,
             current_low,
@@ -100,12 +103,10 @@ def run_backtest(df_1m, df_5m):
         if exit_result:
 
             pnl_hkd = exit_result["pnl_hkd"]
-
             risk.update_after_trade(pnl_hkd, exit_result["exit_time"])
 
             stop_flag = "Y" if not risk.trading_enabled else ""
 
-            # ✅ FIX: Use exit_result instead of position_manager
             trade_record = {
                 "Direction": exit_result["direction"],
                 "Entry Time": exit_result["entry_time"],
@@ -118,23 +119,20 @@ def run_backtest(df_1m, df_5m):
                 "Drawdown (HKD)": risk.get_drawdown(),
                 "Drawdown (%)": risk.get_drawdown_pct(),
                 "SL (Y/N)": stop_flag,
-                "Entry EMA20 Slope": round(exit_result["entry_slope"],2),
-                #"Exit EMA20 Slope": None,
-                "Entry ATR": round(exit_result["entry_atr"],2),
-                #"Exit ATR": None
+                "Entry EMA20 Slope": round(exit_result["entry_slope"], 2),
+                "Entry ATR": round(exit_result["entry_atr"], 2)
             }
 
             trades.append(trade_record)
             performance.record_trade(trade_record)
 
     # ----------------------------------------------------------
-    # ✅ FORCE CLOSE
+    # ✅ FORCE CLOSE OPEN POSITION AT END OF BACKTEST
     # ----------------------------------------------------------
-
     if position_manager.position != 0:
 
-        final_price = df_1m["close"].iloc[-1]
-        final_time = df_1m["datetime"].iloc[-1]
+        final_price = df_entry_full["close"].iloc[-1]
+        final_time = df_entry_full["datetime"].iloc[-1]
 
         entry_price = position_manager.entry_price
         entry_time = position_manager.entry_time
@@ -163,10 +161,8 @@ def run_backtest(df_1m, df_5m):
             "Drawdown (HKD)": risk.get_drawdown(),
             "Drawdown (%)": risk.get_drawdown_pct(),
             "SL (Y/N)": stop_flag,
-            "Entry EMA20 Slope": round(entry_slope,2),
-            #"Exit EMA20 Slope": None,
-            "Entry ATR": round(entry_atr,2),
-            #"Exit ATR": None
+            "Entry EMA20 Slope": round(entry_slope, 2),
+            "Entry ATR": round(entry_atr, 2)
         }
 
         trades.append(trade_record)
@@ -175,7 +171,6 @@ def run_backtest(df_1m, df_5m):
     # ----------------------------------------------------------
     # ✅ SAVE LOG
     # ----------------------------------------------------------
-
     df_trades = pd.DataFrame(trades)
 
     if not os.path.exists("log"):
@@ -201,7 +196,7 @@ def run_backtest(df_1m, df_5m):
             "Entry ATR",
             #"Exit ATR"
         ])
-        df_trades.to_csv("log/backtest_trade_log.csv", index=False)
+    df_trades.to_csv("log/backtest_trade_log.csv", index=False)
 
     metrics = performance.generate_metrics()
 

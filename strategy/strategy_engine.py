@@ -16,35 +16,41 @@ class StrategyEngine:
     # ✅ MAIN EVALUATION ENTRY
     # ==========================================================
 
-    def evaluate(self, df_1m, df_5m, position, df_5m_full=None):
+    def evaluate(self, df_entry, df_structure, position, df_trend=None):
 
-        if df_5m is None or len(df_5m) < 20:
+        # ✅ Require sufficient structure bars
+        if df_structure is None or len(df_structure) < 30:
             return None
 
         # ------------------------------------------------------
         # ✅ Update Intraday Bias
         # ------------------------------------------------------
-        #self.bias_engine.update(df_5m)
+        #self.bias_engine.update(df_structure)
 
         # ------------------------------------------------------
-        # ✅ Compute EMA20 slope (5m)
+        # ✅ Compute EMA20 slope (structure TF)
         # ------------------------------------------------------
-        df5 = df_5m.copy()
-        df5["ema20"] = df5["close"].ewm(span=20, adjust=False).mean()
+        df_struct = df_structure.copy()
+        df_struct["ema20"] = df_struct["close"].ewm(span=20, adjust=False).mean()
 
-        ema_now = df5["ema20"].iloc[-1]
-        ema_prev = df5["ema20"].iloc[-10]
+        # slope uses shift(10) → need stability
+        ema_now = df_struct["ema20"].iloc[-1]
+        ema_prev = df_struct["ema20"].iloc[-10]
         slope = ema_now - ema_prev
 
+        # Guard against NaN slope
+        if pd.isna(slope):
+            return None
+
         # ------------------------------------------------------
-        # ✅ Compute ATR (5m)
+        # ✅ Compute ATR (structure TF)
         # ------------------------------------------------------
-        atr = self._compute_atr(df_5m)
+        atr = self._compute_atr(df_structure)
 
         # ------------------------------------------------------
         # ✅ Generate raw signal
         # ------------------------------------------------------
-        signal = generate_signal(df_1m, df_5m, position)
+        signal = generate_signal(df_entry, df_structure, position)
 
         if signal not in ["BUY", "SELL"]:
             return None
@@ -61,14 +67,25 @@ class StrategyEngine:
         if not atr_filter(atr):
             return None
 
-        if df_5m_full is not None:
-            if not slope_quantile_filter(slope, df_5m_full):
-                return None
-            
+        # ✅ Dynamic slope quantile filter (no future leakage)
+        if df_trend is not None and len(df_trend) >= 30:
+
+            df_full = df_trend.copy()
+            df_full["ema20"] = df_full["close"].ewm(span=20, adjust=False).mean()
+            df_full["ema20_slope"] = (
+                df_full["ema20"] - df_full["ema20"].shift(10)
+            )
+
+            df_full = df_full.dropna(subset=["ema20_slope"])
+
+            if len(df_full) >= 20:
+                if not slope_quantile_filter(slope, df_full):
+                    return None
+
         '''
         if abs(slope) < TREND_SLOPE_THRESHOLD:
-            if df_5m_full is not None:
-                if not slope_quantile_filter(slope, df_5m_full):
+            if df_trend is not None:
+                if not slope_quantile_filter(slope, df_trend):
                     return None
         '''
 
@@ -86,14 +103,14 @@ class StrategyEngine:
     # ✅ ATR COMPUTATION
     # ==========================================================
 
-    def _compute_atr(self, df_5m):
+    def _compute_atr(self, df_structure):
 
-        if len(df_5m) < 15:
+        if len(df_structure) < 15:
             return None
 
-        high = df_5m["high"]
-        low = df_5m["low"]
-        close = df_5m["close"]
+        high = df_structure["high"]
+        low = df_structure["low"]
+        close = df_structure["close"]
 
         tr = pd.concat([
             high - low,

@@ -13,7 +13,15 @@ ENABLE_SHORT = True
 
 # Download Data
 # ==========================================================
-TIMEFRAME = 5  # 1/5/15/30
+TIMEFRAME = 1  # 1/5/15/30
+
+# TIMEFRAME CONFIGURATION
+# ==========================================================
+TIMEFRAME_CONFIG = {
+    "trend": 5,
+    "structure": 5,
+    "entry": 1
+}
 
 # DATA SETTINGS
 # ==========================================================
@@ -23,7 +31,7 @@ KLINE_5M = 300
 # BACKTEST SETTINGS
 # ==========================================================
 INITIAL_CAPITAL = 100000
-START_DATE = "2026-03-01"
+START_DATE = "2026-06-01"
 END_DATE = "2026-06-30"
 
 # Trade Config
@@ -38,7 +46,7 @@ MIN_ENTRY_ATR = 33    # volatility filter threshold
 # VOLUME CONFIRMATION SETTINGS (NEW)
 # ==========================================================
 VOLUME_MA_PERIOD = 20          # Look back period for volume MA
-VOLUME_MULTIPLIER = 1.3        # Current vol must be > 1.3x MA
+VOLUME_MULTIPLIER = 1       # Current vol must be > 1.1x MA
 VOLUME_CONFIRMATION_ENABLED = True
 PRINT_DEBUG_VOLUME = False     # Debug flag for volume filtering
 
@@ -73,7 +81,7 @@ MAX_DAILY_LOSS = 2000
 # ==========================================================
 PRINT_DEBUG_REGIME = True
 PRINT_DEBUG_SIGNAL = True
-PRINT_DEBUG_VOLUME = False     # Volume filter debug
+PRINT_DEBUG_VOLUME = True     # Volume filter debug
 
 # ==========================================================
 # DIAGNOSTICS MODULE CONTROL

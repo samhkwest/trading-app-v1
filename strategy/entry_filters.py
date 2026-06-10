@@ -72,7 +72,7 @@ def slope_quantile_filter(current_slope, df_5m_full):
 
 
 # ==========================================================
-# ✅ VOLUME CONFIRMATION FILTER (NEW)
+# ✅ VOLUME CONFIRMATION FILTER
 # ==========================================================
 
 def volume_confirmation_filter(df_5m, print_debug=False):
