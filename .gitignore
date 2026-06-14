@@ -29,7 +29,6 @@ log/
 # =========================
 # Data Files (Important for trading apps)
 # =========================
-data/
 *.csv
 *.parquet
 
