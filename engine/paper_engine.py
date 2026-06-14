@@ -12,9 +12,13 @@ from risk.risk_manager import RiskManager
 from risk.performance_tracker import PerformanceTracker
 from config import HOST, PORT, INITIAL_CAPITAL, POINT_VALUE, TIMEFRAME_CONFIG
 
+
 class PaperTrader:
 
-    MARKET_CLOSE_TIMES = [dtime(12, 0), dtime(16, 30)]
+    MARKET_CLOSE_WINDOWS = [
+        (dtime(12, 0), dtime(12, 2)),
+        (dtime(16, 30), dtime(16, 32)),
+    ]
 
     def __init__(self, code):
 
@@ -30,7 +34,7 @@ class PaperTrader:
 
         today = datetime.now().date()
         self.performance = PerformanceTracker(
-            INITIAL_CAPITAL,
+            INITIAL_CAPITAL, 
             period=str(today)
         )
 
@@ -38,7 +42,7 @@ class PaperTrader:
 
         self.quote_ctx = OpenQuoteContext(host=HOST, port=PORT)
 
-        # ✅ Dynamic timeframe subscription
+    # ✅ Dynamic timeframe subscription
         entry_tf = TIMEFRAME_CONFIG["entry"]
         structure_tf = TIMEFRAME_CONFIG["structure"]
         trend_tf = TIMEFRAME_CONFIG["trend"]
@@ -59,10 +63,10 @@ class PaperTrader:
     # -------------------------------------------------
     def is_market_close(self, now):
         current_time = now.time()
-        return any(
-            current_time.hour == t.hour and current_time.minute == t.minute
-            for t in self.MARKET_CLOSE_TIMES
-        )
+        for close_start, close_end in self.MARKET_CLOSE_WINDOWS:
+            if close_start <= current_time <= close_end:
+                return True
+        return False
 
     # -------------------------------------------------
     # ✅ Force Close Logic
@@ -136,18 +140,15 @@ class PaperTrader:
         filename = f"log/paper_trade_log_{datetime.now().strftime('%Y%m')}.log"
 
         with open(filename, "w", encoding="utf-8") as f:
-
             f.write("================ TRADE LOG =================\n")
             for t in self.trades:
                 f.write(str(t) + "\n")
-
             f.write("\n================ PERFORMANCE REPORT ================\n")
             for k, v in metrics.items():
                 f.write(f"{k}: {v}\n")
             f.write("====================================================\n")
 
         print(f"Paper trade log saved to {filename}")
-
         self.quote_ctx.close()
 
     # -------------------------------------------------
@@ -196,14 +197,11 @@ class PaperTrader:
         last_price = df_entry["close"].iloc[-1]
         high = df_entry["high"].iloc[-1]
         low = df_entry["low"].iloc[-1]
-
         # -------------------------------------------------
         # ✅ STRATEGY EVALUATION
         # -------------------------------------------------
         decision = self.strategy.evaluate(
-            df_entry,
-            df_structure,
-            self.position_manager.position,
+            df_entry, df_structure, self.position_manager.position,
             df_trend=df_trend
         )
 
@@ -214,6 +212,7 @@ class PaperTrader:
             decision
             and self.position_manager.position == 0
             and self.risk.trading_enabled
+            and self.risk.is_cooled_down()
         ):
             self.execution.process_entry(
                 decision,
@@ -228,12 +227,11 @@ class PaperTrader:
             high,
             low,
             current_time
-        )
+            )
 
         if exit_result:
 
             pnl_hkd = exit_result["pnl_hkd"]
-
             self.risk.update_after_trade(pnl_hkd, current_time)
 
             trade_record = {
@@ -266,12 +264,18 @@ class PaperTrader:
 
     def is_market_open(self, now):
 
-        # ✅ Weekday check (Mon=0, Sun=6)
-        if now.weekday() > 4:   # 5=Sat, 6=Sun
+        t = now.time()
+        weekday = now.weekday()
+
+        # Saturday 00:00-03:00 is part of Friday's night session
+        if weekday == 5 and t <= dtime(3, 0):
+            return True
+
+        # Saturday (after 3am) and Sunday: closed
+        if weekday >= 5:
             return False
 
         t = now.time()
-
         morning_start = dtime(9, 15)
         morning_end   = dtime(12, 0)
 
@@ -279,7 +283,7 @@ class PaperTrader:
         afternoon_end   = dtime(16, 30)
 
         night_start = dtime(17, 15)
-        night_end   = dtime(3, 0)  # next day
+        night_end   = dtime(3, 0)
 
         # Morning session
         if morning_start <= t <= morning_end:
@@ -294,7 +298,6 @@ class PaperTrader:
             return True
 
         return False
-
     # -------------------------------------------------
     # ✅ Main Loop
     # -------------------------------------------------
@@ -302,7 +305,6 @@ class PaperTrader:
 
         now = datetime.now()
         print("Now:", now, "| Market Open:", self.is_market_open(now))
-
         print("Entering run loop...")
 
         while not self.shutdown_triggered:

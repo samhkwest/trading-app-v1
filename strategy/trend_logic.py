@@ -30,11 +30,11 @@ def trend_signal(df_entry, df_structure, position):
     ema5_series = df1["close"].ewm(span=5, adjust=False).mean()
     ema10_series = df1["close"].ewm(span=10, adjust=False).mean()
 
-    ema5 = ema5_series.iloc[-1]
-    ema10 = ema10_series.iloc[-1]
+    ema5 = ema5_series.iloc[-2]
+    ema10 = ema10_series.iloc[-2]
 
     close_now = df1["close"].iloc[-1]
-    close_prev = df1["close"].iloc[-2]
+    close_prev = df1["close"].iloc[-3]
 
     # -------------------------------------------------
     # 2️⃣ Compute EMA20 slope on 5m (structure timeframe)

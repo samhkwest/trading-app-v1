@@ -47,7 +47,7 @@ def atr_filter(atr_value):
 # ✅ EMA20 SLOPE QUANTILE FILTER
 # ==========================================================
 
-def slope_quantile_filter(current_slope, df_5m_full):
+def slope_quantile_filter(current_slope, df_5m_full, ema20_series=None):
     """
     Block trades when slope is too strong relative to
     historical slope distribution (top 25%).
@@ -60,7 +60,10 @@ def slope_quantile_filter(current_slope, df_5m_full):
 
     df_copy = df_5m_full.copy()
 
-    df_copy["ema20"] = df_copy["close"].ewm(span=20, adjust=False).mean()
+    if ema20_series is not None:
+        df_copy["ema20"] = ema20_series
+    else:
+        df_copy["ema20"] = df_copy["close"].ewm(span=20, adjust=False).mean()
     df_copy["ema20_slope"] = df_copy["ema20"] - df_copy["ema20"].shift(10)
 
     slope_q3 = df_copy["ema20_slope"].quantile(0.75)

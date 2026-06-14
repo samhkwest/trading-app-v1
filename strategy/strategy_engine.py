@@ -60,6 +60,11 @@ class StrategyEngine:
         # ------------------------------------------------------
         #if not self.bias_engine.allow(signal):
         #    return None
+        if signal == "BUY" and not ENABLE_LONG:
+            return None
+
+        if signal == "SELL" and not ENABLE_SHORT:
+            return None
 
         # ------------------------------------------------------
         # ✅ Entry Filters
@@ -79,7 +84,7 @@ class StrategyEngine:
             df_full = df_full.dropna(subset=["ema20_slope"])
 
             if len(df_full) >= 20:
-                if not slope_quantile_filter(slope, df_full):
+                if not slope_quantile_filter(slope, df_full, ema20_series=df_full["ema20"]):
                     return None
 
         '''
@@ -118,6 +123,7 @@ class StrategyEngine:
             (low - close.shift()).abs()
         ], axis=1).max(axis=1)
 
-        atr = tr.rolling(14).mean().iloc[-1]
+        #atr = tr.rolling(14).mean().iloc[-1]
+        atr = tr.ewm(alpha=1/14, adjust=False).mean().iloc[-1]
 
         return atr

@@ -106,6 +106,11 @@ def sweep_signal(df_structure, position):
         ):
             return None
 
+        if is_exhausted_move(df):
+            if PRINT_DEBUG_VOLUME:
+                print("[Sweep] SELL signal BLOCKED by exhaustion filter")
+            return None
+
         return "SELL"
 
     return None

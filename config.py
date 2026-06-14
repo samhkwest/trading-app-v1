@@ -13,7 +13,7 @@ ENABLE_SHORT = True
 
 # Download Data
 # ==========================================================
-TIMEFRAME = 1  # 1/5/15/30
+TIMEFRAME = 5  # 1/5/15/30
 
 # TIMEFRAME CONFIGURATION
 # ==========================================================
@@ -31,12 +31,12 @@ KLINE_5M = 300
 # BACKTEST SETTINGS
 # ==========================================================
 INITIAL_CAPITAL = 100000
-START_DATE = "2026-06-01"
-END_DATE = "2026-06-30"
+START_DATE = "2026-03-01"
+END_DATE = "2026-06-07"
 
 # Trade Config
 # ==========================================================
-WARMUP_BARS = 6
+WARMUP_BARS = 20
 POINT_VALUE = 10      # MHI = HKD 10 per point
 TAKE_PROFIT = 200     # in points
 STOP_LOSS = 50        # in points
@@ -46,7 +46,7 @@ MIN_ENTRY_ATR = 33    # volatility filter threshold
 # VOLUME CONFIRMATION SETTINGS (NEW)
 # ==========================================================
 VOLUME_MA_PERIOD = 20          # Look back period for volume MA
-VOLUME_MULTIPLIER = 1       # Current vol must be > 1.1x MA
+VOLUME_MULTIPLIER = 1.3        # Current vol must be > 1.1x MA
 VOLUME_CONFIRMATION_ENABLED = True
 PRINT_DEBUG_VOLUME = False     # Debug flag for volume filtering
 
@@ -92,3 +92,7 @@ DIAGNOSTICS_PATH = "log/backtest_trade_log.csv"
 # Trend Regime Control
 # ==========================================================
 TREND_SLOPE_THRESHOLD = 45   # 5m EMA20 slope threshold
+
+# Divergence Reversal Control
+# ==========================================================
+DIVERGENCE_MIN_SLOPE = 20
